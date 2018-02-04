@@ -21,6 +21,7 @@ Thanks to my collague at Espressif for writing the foundations of this code.
    #include <unistd.h>
    #include <arpa/inet.h>
 #else
+   #include "esp_log.h"
     #include <libesphttpd/esp.h>
 #endif
 
@@ -28,8 +29,6 @@ Thanks to my collague at Espressif for writing the foundations of this code.
 #include "libesphttpd/platform.h"
 #include "httpd-platform.h"
 #include "libesphttpd/httpd-freertos.h"
-
-#include "esp_log.h"
 
 #ifdef FREERTOS
    #include "freertos/FreeRTOS.h"
@@ -375,7 +374,7 @@ static PLAT_RETURN platHttpServerTask( void *pvParameters )
       {
          FD_SET( listenfd, &readset );
          if( listenfd > maxfdp ) maxfdp = listenfd;
-         ESP_LOGD( TAG, "Sel add listen %d", listenfd );
+         // ESP_LOGD( TAG, "Sel add listen %d", listenfd );
          if( !listeningForNewConnections )
          {
             listeningForNewConnections = true;
@@ -398,7 +397,7 @@ static PLAT_RETURN platHttpServerTask( void *pvParameters )
 
       // polling all exist client handle,wait until readable/writable
       ret = select( maxfdp + 1, &readset, &writeset, NULL, NULL ); // &timeout
-      ESP_LOGD( TAG, "select ret" );
+      // ESP_LOGD( TAG, "select ret" );
       if( ret > 0 )
       {
 #ifdef CONFIG_ESPHTTPD_SHUTDOWN_SUPPORT
@@ -591,6 +590,7 @@ static PLAT_RETURN platHttpServerTask( void *pvParameters )
 
       if( pRconn->fd != -1 )
       {
+         // recv error,connection close
          closeConnection( pInstance, pRconn );
       }
    }
@@ -717,7 +717,7 @@ void httpdPlatTimerDelete( HttpdPlatTimerHandle timer )
 {
    xTimerDelete( timer, 0 );
 }
-#endif
+#endif  // linux
 
 // Httpd initialization routine. Call this to kick off webserver functionality.
 HttpdInitStatus ICACHE_FLASH_ATTR httpdFreertosInitEx( HttpdFreertosInstance *pInstance,

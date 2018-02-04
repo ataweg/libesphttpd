@@ -34,7 +34,7 @@ static int ICACHE_FLASH_ATTR checkBinHeader( void *buf )
 {
    uint8_t *cd = ( uint8_t * )buf;
 #ifdef ESP32
-   printf( "checkBinHeader: %x %x %x\n", cd[0], ( ( uint16_t * )buf )[3], ( ( uint32_t * )buf )[0x6] );
+    ESP_LOGD( TAG, "checkBinHeader: %x %x %x", cd[0], ( ( uint16_t * )buf )[3], ( ( uint32_t * )buf )[0x6] );
    if( cd[0] != 0xE9 ) return 0;
    if( ( ( uint16_t * )buf )[3] != 0x4008 ) return 0;
    uint32_t a = ( ( uint32_t * )buf )[0x6];
@@ -275,9 +275,9 @@ CgiStatus ICACHE_FLASH_ATTR cgiUploadFirmware( HttpdConnData *connData )
 
 #if 0
    // TODO: maybe use ESP_LOGD() here in the future
-   printf( "post->len %d, post->received %d\n", connData->post->len,
-           connData->post->received );
-   printf( "state->len %d, state->address: %d\n", state->len, state->address );
+   ESP_LOGD( TAG, "post->len %d, post->received %d", connData->post.len,
+           connData->post.received );
+   ESP_LOGD( TAG, "state->len %d, state->address: %d", state->len, state->address );
 #endif
 
    if( connData->post.len == connData->post.received )
@@ -344,8 +344,8 @@ CgiStatus ICACHE_FLASH_ATTR cgiUploadFirmware( HttpdConnData *connData )
       state->err = "Premature end";
    }
 
-   char *data = connData->post->buff;
-   int dataLen = connData->post->buffLen;
+   char *data = connData->post.buff;
+   int dataLen = connData->post.buffLen;
 
    while( dataLen != 0 )
    {
@@ -373,7 +373,7 @@ CgiStatus ICACHE_FLASH_ATTR cgiUploadFirmware( HttpdConnData *connData )
                   state->state = FLST_ERROR;
                }
             }
-            if( state->state != FLST_ERROR && connData->post->len > def->fwSize * 2 + sizeof( OtaHeader ) )
+            if( state->state != FLST_ERROR && connData->post.len > def->fwSize * 2 + sizeof( OtaHeader ) )
             {
                state->err = "Firmware image too large";
                state->state = FLST_ERROR;
@@ -401,30 +401,30 @@ CgiStatus ICACHE_FLASH_ATTR cgiUploadFirmware( HttpdConnData *connData )
                }
             }
          }
-         else if( def->type == CGIFLASH_TYPE_FW && checkBinHeader( connData->post->buff ) )
+         else if( def->type == CGIFLASH_TYPE_FW && checkBinHeader( connData->post.buff ) )
          {
-            if( connData->post->len > def->fwSize )
+            if( connData->post.len > def->fwSize )
             {
                state->err = "Firmware image too large";
                state->state = FLST_ERROR;
             }
             else
             {
-               state->len = connData->post->len;
+               state->len = connData->post.len;
                state->address = def->fw1Pos;
                state->state = FLST_WRITE;
             }
          }
-         else if( def->type == CGIFLASH_TYPE_ESPFS && checkEspfsHeader( connData->post->buff ) )
+         else if( def->type == CGIFLASH_TYPE_ESPFS && checkEspfsHeader( connData->post.buff ) )
          {
-            if( connData->post->len > def->fwSize )
+            if( connData->post.len > def->fwSize )
             {
                state->err = "Firmware image too large";
                state->state = FLST_ERROR;
             }
             else
             {
-               state->len = connData->post->len;
+               state->len = connData->post.len;
                state->address = def->fw1Pos;
                state->state = FLST_WRITE;
             }
@@ -484,7 +484,7 @@ CgiStatus ICACHE_FLASH_ATTR cgiUploadFirmware( HttpdConnData *connData )
                spi_flash_erase_sector( state->address / SPI_FLASH_SEC_SIZE );
             }
             // Write page
-            // httpd_printf("Writing %d bytes of data to SPI pos 0x%x...\n", state->pagePos, state->address);
+            //  ESP_LOGD( TAG, "Writing %d bytes of data to SPI pos 0x%x...", state->pagePos, state->address);
             spi_flash_write( state->address, ( uint32 * )state->pageData, state->pagePos );
             state->address += PAGELEN;
             state->pagePos = 0;
@@ -509,7 +509,7 @@ CgiStatus ICACHE_FLASH_ATTR cgiUploadFirmware( HttpdConnData *connData )
       }
    }
 
-   if( connData->post->len == connData->post->received )
+   if( connData->post.len == connData->post.received )
    {
       // We're done! Format a response.
       ESP_LOGD( TAG, "Upload done. Sending response" );

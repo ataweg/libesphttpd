@@ -21,6 +21,7 @@ It's written for use with httpd, but doesn't need to be used as such.
    #if __ets__ || ESP_PLATFORM
       // esp build
       #include <libesphttpd/esp.h>
+      #include "esp_log.h"
    #else
       // Test build
       #include <stdio.h>
@@ -40,23 +41,23 @@ It's written for use with httpd, but doesn't need to be used as such.
    #include "heatshrink_decoder.h"
 #endif
 
-#include "esp_log.h"
-const static char* TAG = "espfs";
-
 // Define to enable more verbose output
 #undef VERBOSE_OUTPUT
+//#define VERBOSE_OUTPUT
+
+const static char* TAG = "espfs";
 
 // ESP8266 stores flash offsets here. ESP32, for now, stores memory locations here.
-static char* espFsData = NULL;
+static const char* espFsData = NULL;
 
 
 struct EspFsFile
 {
-   EspFsHeader *header;
+   const EspFsHeader *header;
    char decompressor;
    int32_t posDecomp;
-   char *posStart;
-   char *posComp;
+   const char *posStart;
+   const char *posComp;
    void *decompData;
 };
 
@@ -128,7 +129,7 @@ EspFsInitResult ICACHE_FLASH_ATTR espFsInit( void *flashAddress )
       return ESPFS_INIT_RESULT_NO_IMAGE;
    }
 
-   espFsData = ( char * )flashAddress;
+   espFsData = ( const char * )flashAddress;
    return ESPFS_INIT_RESULT_OK;
 }
 
@@ -157,8 +158,8 @@ EspFsFile ICACHE_FLASH_ATTR *espFsOpen( const char *fileName )
       ESP_LOGE( TAG, "Call espFsInit first" );
       return NULL;
    }
-   char *p = espFsData;
-   char *hpos;
+   const char *p = espFsData;
+   const char *hpos;
    char namebuf[256];
    EspFsHeader h;
    EspFsFile *r;
@@ -179,7 +180,7 @@ EspFsFile ICACHE_FLASH_ATTR *espFsOpen( const char *fileName )
       }
       if( h.flags & FLAG_LASTFILE )
       {
-         ESP_LOGD( TAG, "End of image" );
+         ESP_LOGD( TAG, "End of image." );
          return NULL;
       }
       // Grab the name of the file.
@@ -259,7 +260,7 @@ int ICACHE_FLASH_ATTR espFsRead( EspFsFile *fh, char *buff, int len )
       fh->posDecomp += len;
       fh->posComp += len;
 #ifdef VERBOSE_OUTPUT
-      ESP_LOGD( TAG, "Done reading %d bytes, pos=%x", len, fh->posComp );
+      ESP_LOGD( TAG, "Done reading %d bytes, pos=%x", len, (uint32_t) fh->posComp );
 #endif
       return len;
 #ifdef ESPFS_HEATSHRINK
@@ -301,7 +302,7 @@ int ICACHE_FLASH_ATTR espFsRead( EspFsFile *fh, char *buff, int len )
          decoded += rlen;
 
 #ifdef VERBOSE_OUTPUT
-         ESP_LOGD( TAG, "Elen %d rlen %d d %d pd %ld fdl %d\n", elen, rlen, decoded, fh->posDecomp, fdlen );
+         ESP_LOGD( TAG, "Elen %d rlen %d d %d pd %d fdl %d", elen, rlen, decoded, (uint32_t) fh->posDecomp, fdlen );
 #endif
 
          if( elen == 0 )

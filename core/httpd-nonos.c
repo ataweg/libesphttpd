@@ -8,10 +8,13 @@ ESP8266 web server - platform-dependent routines, nonos version
 
 #include <libesphttpd/esp.h>
 #include "libesphttpd/httpd.h"
-#include "libesphttpd/platform.h"
 #include "httpd-platform.h"
 
 #ifndef FREERTOS
+
+#ifndef HTTPD_CONN_TIMEOUT
+   #define HTTPD_CONN_TIMEOUT 2
+#endif
 
 // Listening connection data
 static struct espconn httpdConn;
@@ -46,7 +49,7 @@ static void ICACHE_FLASH_ATTR platDisconCb( void *arg )
 static void ICACHE_FLASH_ATTR platRecvCb( void *arg, char *data, unsigned short len )
 {
    ConnTypePtr conn = arg;
-   httpdRecvCb( conn, ( char* )conn->proto.tcp->remote_ip, conn->proto.tcp->remote_port, data, len );
+   httpdRecvCb( conn, ( const char* )conn->proto.tcp->remote_ip, conn->proto.tcp->remote_port, data, len );
 }
 
 static void ICACHE_FLASH_ATTR platSentCb( void *arg )
@@ -102,7 +105,8 @@ HttpdInitStatus ICACHE_FLASH_ATTR httpdPlatInit( int port, int maxConnCt, uint32
    httpdConn.proto.tcp = &httpdTcp;
    espconn_regist_connectcb( &httpdConn, platConnCb );
    espconn_accept( &httpdConn );
-   espconn_tcp_set_max_con_allow( &httpdConn, maxConnCt );
+   espconn_regist_time( &httpdConn, HTTPD_CONN_TIMEOUT, 0 ); // Configure timeout
+   espconn_tcp_set_max_con_allow( &httpdConn, (uint8) maxConnCt );
 
    return InitializationSuccess;
 }

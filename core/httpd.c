@@ -13,6 +13,8 @@ Http server - core routines
 #ifdef linux
 #include <libesphttpd/linux.h>
 #else
+   #define LOG_LOCAL_LEVEL    ESP_LOG_DEBUG
+   #include "esp_log.h"
 #include <libesphttpd/esp.h>
 #endif
 
@@ -20,8 +22,6 @@ Http server - core routines
 
 #include "libesphttpd/httpd.h"
 #include "httpd-platform.h"
-
-#include "esp_log.h"
 
 const static char* TAG = "httpd";
 
@@ -179,11 +179,14 @@ int ICACHE_FLASH_ATTR httpdFindArg( char *line, char *arg, char *buff, int buffL
    p = line;
    while( p != NULL && *p != '\n' && *p != '\r' && *p != 0 )
    {
+      // ESP_LOGD( TAG, "findArg: %s", p);
+      // check if line starts with "arg="
       if( strncmp( p, arg, arglen ) == 0 && p[arglen] == '=' )
       {
          p += arglen + 1; // move p to start of value
          e = ( char* )strstr( p, "&" );
          if( e == NULL ) e = p + strlen( p );
+         // ESP_LOGD( TAG, "findArg: val %s len %d", p, (e-p));
          int bytesWritten;
          if( !httpdUrlDecode( p, ( e - p ), buff, buffLen, &bytesWritten ) )
          {
@@ -192,10 +195,11 @@ int ICACHE_FLASH_ATTR httpdFindArg( char *line, char *arg, char *buff, int buffL
          }
          return bytesWritten;
       }
+      // line doesn't start with "arg=", so look for '&'
       p = ( char* )strstr( p, "&" );
       if( p != NULL ) p += 1;
    }
-   ESP_LOGD( TAG, "Finding %s in %s: Not found", arg, line );
+   // ESP_LOGD( TAG, "Finding %s in %s: Not found", arg, line );
    return -1; // not found
 }
 
@@ -298,6 +302,7 @@ void ICACHE_FLASH_ATTR httpdEndHeaders( HttpdConnData *conn )
 // Redirect to the given URL.
 void ICACHE_FLASH_ATTR httpdRedirect( HttpdConnData *conn, const char *newUrl )
 {
+   ESP_LOGD( TAG, "Redirecting to %s", newUrl );
    httpdStartResponse( conn, 302 );
    httpdHeader( conn, "Location", newUrl );
    httpdEndHeaders( conn );
@@ -328,7 +333,11 @@ int ICACHE_FLASH_ATTR httpdSend( HttpdConnData *conn, const char *data, int len 
    if( len == 0 ) return 0;
    if( conn->priv.flags & HFL_CHUNKED && conn->priv.flags & HFL_SENDINGBODY && conn->priv.chunkHdr == NULL )
    {
-      if( conn->priv.sendBuffLen + len + CHUNK_SIZE_TEXT_LEN > HTTPD_MAX_SENDBUFF_LEN ) return 0;
+      if( conn->priv.sendBuffLen + len + CHUNK_SIZE_TEXT_LEN > HTTPD_MAX_SENDBUFF_LEN )
+      {
+         ESP_LOGE( TAG, "httpdSend (chrunked): sendbuffer will overflow, discard data" );
+         return 0;
+      }
 
       // Establish start of chunk
       // Use a chunk length placeholder of 4 characters
@@ -337,7 +346,11 @@ int ICACHE_FLASH_ATTR httpdSend( HttpdConnData *conn, const char *data, int len 
       conn->priv.sendBuffLen += CHUNK_SIZE_TEXT_LEN;
       assert( conn->priv.sendBuffLen <= HTTPD_MAX_SENDBUFF_LEN );
    }
-   if( conn->priv.sendBuffLen + len > HTTPD_MAX_SENDBUFF_LEN ) return 0;
+   if( conn->priv.sendBuffLen + len > HTTPD_MAX_SENDBUFF_LEN )
+   {
+      ESP_LOGE( TAG, "httpdSend: sendbuffer will overflow, discard data" );
+      return 0;
+   }
    memcpy( conn->priv.sendBuff + conn->priv.sendBuffLen, data, len );
    conn->priv.sendBuffLen += len;
    assert( conn->priv.sendBuffLen <= HTTPD_MAX_SENDBUFF_LEN );
@@ -418,7 +431,8 @@ int ICACHE_FLASH_ATTR httpdSend_js( HttpdConnData *conn, const char *data, int l
       else if( c == '\r' ) httpdSend_orDie( conn, "\\r", 2 );
    }
 
-   if( start < end ) httpdSend_orDie( conn, data + start, end - start );
+   if( start < end )
+      httpdSend_orDie( conn, data + start, end - start );
    return 1;
 }
 
@@ -550,7 +564,7 @@ CallbackStatus ICACHE_FLASH_ATTR httpdContinue( HttpdInstance *pInstance, HttpdC
    {
       // We have some backlog to send first.
       HttpSendBacklogItem *next = conn->priv.sendBacklog->next;
-      int bytesWritten = httpdPlatSendData( pInstance, conn->conn, conn->priv.sendBacklog->data, conn->priv.sendBacklog->len );
+      int bytesWritten = httpdPlatSendData( pInstance, conn, conn->priv.sendBacklog->data, conn->priv.sendBacklog->len );
       if( bytesWritten != conn->priv.sendBacklog->len )
       {
          ESP_LOGE( TAG, "tried to write %d bytes, wrote %d", conn->priv.sendBacklog->len, bytesWritten );
@@ -680,7 +694,9 @@ static void ICACHE_FLASH_ATTR httpdProcessRequest( HttpdInstance *pInstance, Htt
 
       // Okay, we have a CGI function that matches the URL. See if it wants to handle the
       // particular URL we're supposed to handle.
-      r = conn->cgi( conn );
+      // ESP_LOGD( TAG, "httpdProcessRequest: Execute cgi fn." );
+      r = conn->cgi( conn ); // Execute cgi fn.
+
       if( r == HTTPD_CGI_MORE )
       {
          // Yep, it's happy to do so and has more data to send.
@@ -898,6 +914,7 @@ CallbackStatus ICACHE_FLASH_ATTR httpdRecvCb( HttpdInstance *pInstance, HttpdCon
    {
       if( conn->post.len < 0 ) // This byte is a header byte
       {
+         // This byte is a header byte.
          if( data[x] == '\n' )
          {
             if( conn->priv.headPos < HTTPD_MAX_HEAD_LEN - 1 )
@@ -965,7 +982,8 @@ CallbackStatus ICACHE_FLASH_ATTR httpdRecvCb( HttpdInstance *pInstance, HttpdCon
             // Process the data
             if( conn->cgi )
             {
-               r = conn->cgi( conn );
+               ESP_LOGD( TAG, "httpdRecvCb: Execute cgi fn." );
+               r = conn->cgi( conn ); // Execute cgi fn.
 
                if( r == HTTPD_CGI_DONE )
                {
@@ -1017,7 +1035,11 @@ CallbackStatus ICACHE_FLASH_ATTR httpdDisconCb( HttpdInstance *pInstance, HttpdC
    ESP_LOGD( TAG, "Socket closed" );
    pConn->isConnectionClosed = true;
 
-   if( pConn->cgi ) pConn->cgi( pConn ); // Execute cgi fn if needed
+   if( pConn->cgi )
+   {
+      ESP_LOGD( TAG, "httpdDisconCb: Execute cgi fn." );
+      pConn->cgi( pConn ); // Execute cgi fn if needed
+   }
    httpdRetireConn( pInstance, pConn );
    httpdPlatUnlock( pInstance );
 

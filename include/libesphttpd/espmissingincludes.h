@@ -42,7 +42,7 @@ void uart_div_modify( uint8 no, uint32 freq );
 uint32 system_get_time();
 int rand( void );
 void ets_bzero( void *s, size_t n );
-void ets_delay_us( uint16_t ms );
+void ets_delay_us( uint32_t ms );
 
 // Hack: this is defined in SDK 1.4.0 and undefined in 1.3.0. It's only used for this, the symbol itself
 // has no meaning here.

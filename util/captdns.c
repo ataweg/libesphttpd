@@ -10,10 +10,11 @@ be used to send mobile phones, tablets etc which connect to the ESP in AP mode d
 the internal webserver.
 */
 
-#include <libesphttpd/esp.h>
+#define LOG_LOCAL_LEVEL    ESP_LOG_DEBUG
 #include "esp_log.h"
-
 static const char* TAG = "captdns";
+
+#include <libesphttpd/esp.h>
 
 #ifdef FREERTOS
 
@@ -375,6 +376,7 @@ void captdnsInit( void )
 
 void ICACHE_FLASH_ATTR captdnsInit( void )
 {
+   ESP_LOGI( TAG, "Starting captive portal..." );
    static struct espconn conn;
    static esp_udp udpconn;
    conn.type = ESPCONN_UDP;

@@ -6,13 +6,16 @@
 Cgi/template routines for the /wifi url.
 */
 
+#ifndef ESP32
 
 #include <libesphttpd/esp.h>
 #include "libesphttpd/cgiwifi.h"
 
+#include "esp_log.h"
+const static char* TAG = "cgiwifi";
+
 // Enable this to disallow any changes in AP settings
 // #define DEMO_MODE
-#ifndef ESP32
 
 // WiFi access point data
 typedef struct
@@ -51,7 +54,7 @@ void ICACHE_FLASH_ATTR wifiScanDoneCb( void *arg, STATUS status )
 {
    int n;
    struct bss_info *bss_link = ( struct bss_info * )arg;
-   httpd_printf( "wifiScanDoneCb %d\n", status );
+   ESP_LOGD( TAG, "wifiScanDoneCb %d\n", status );
    if( status != OK )
    {
       cgiWifiAps.scanInProgress = 0;
@@ -61,7 +64,8 @@ void ICACHE_FLASH_ATTR wifiScanDoneCb( void *arg, STATUS status )
    // Clear prev ap data if needed.
    if( cgiWifiAps.apData != NULL )
    {
-      for( n = 0; n < cgiWifiAps.noAps; n++ ) free( cgiWifiAps.apData[n] );
+      for( n = 0; n < cgiWifiAps.noAps; n++ ) 
+         free( cgiWifiAps.apData[n] );
       free( cgiWifiAps.apData );
    }
 
@@ -76,11 +80,11 @@ void ICACHE_FLASH_ATTR wifiScanDoneCb( void *arg, STATUS status )
    cgiWifiAps.apData = ( ApData ** )malloc( sizeof( ApData * )*n );
    if( cgiWifiAps.apData == NULL )
    {
-      printf( "Out of memory allocating apData\n" );
+       ESP_LOGE( TAG, "Out of memory allocating apData" );
       return;
    }
    cgiWifiAps.noAps = n;
-   httpd_printf( "Scan done: found %d APs\n", n );
+   ESP_LOGD( TAG, "Scan done: found %d APs", n );
 
    // Copy access point data to the static struct
    n = 0;
@@ -91,14 +95,14 @@ void ICACHE_FLASH_ATTR wifiScanDoneCb( void *arg, STATUS status )
       {
          // This means the bss_link changed under our nose. Shouldn't happen!
          // Break because otherwise we will write in unallocated memory.
-         httpd_printf( "Huh? I have more than the allocated %d aps!\n", cgiWifiAps.noAps );
+         ESP_LOGE( TAG, "Huh? I have more than the allocated %d aps!", cgiWifiAps.noAps );
          break;
       }
       // Save the ap data.
       cgiWifiAps.apData[n] = ( ApData * )malloc( sizeof( ApData ) );
       if( cgiWifiAps.apData[n] == NULL )
       {
-         httpd_printf( "Can't allocate mem for ap buff.\n" );
+         ESP_LOGE( TAG, "Can't allocate mem for ap buff." );
          cgiWifiAps.scanInProgress = 0;
          return;
       }
@@ -119,13 +123,10 @@ void ICACHE_FLASH_ATTR wifiScanDoneCb( void *arg, STATUS status )
 // Routine to start a WiFi access point scan.
 static void ICACHE_FLASH_ATTR wifiStartScan()
 {
-// int x;
    if( cgiWifiAps.scanInProgress ) return;
    cgiWifiAps.scanInProgress = 1;
    wifi_station_scan( NULL, wifiScanDoneCb );
 }
-
-#endif
 
 // This CGI is called from the bit of AJAX-code in wifi.tpl. It will initiate a
 // scan for access points and if available will return the result of an earlier scan.
@@ -133,10 +134,9 @@ static void ICACHE_FLASH_ATTR wifiStartScan()
 
 CgiStatus ICACHE_FLASH_ATTR cgiWiFiScan( HttpdConnData *connData )
 {
-#ifndef ESP32
    int pos = ( int )connData->cgiData;
    int len;
-   char buff[1024];
+   char buff[256];
 
    if( !cgiWifiAps.scanInProgress && pos != 0 )
    {
@@ -144,14 +144,19 @@ CgiStatus ICACHE_FLASH_ATTR cgiWiFiScan( HttpdConnData *connData )
       if( pos - 1 < cgiWifiAps.noAps )
       {
          len = sprintf( buff, "{\"essid\": \"%s\", \"bssid\": \"" MACSTR "\", \"rssi\": \"%d\", \"enc\": \"%d\", \"channel\": \"%d\"}%s\n",
-                        cgiWifiAps.apData[pos - 1]->ssid, MAC2STR( cgiWifiAps.apData[pos - 1]->bssid ), cgiWifiAps.apData[pos - 1]->rssi,
-                        cgiWifiAps.apData[pos - 1]->enc, cgiWifiAps.apData[pos - 1]->channel, ( pos - 1 == cgiWifiAps.noAps - 1 ) ? "" : "," );
+                        cgiWifiAps.apData[pos - 1]->ssid, 
+                        MAC2STR( cgiWifiAps.apData[pos - 1]->bssid ), 
+                        cgiWifiAps.apData[pos - 1]->rssi,
+                        cgiWifiAps.apData[pos - 1]->enc, 
+                        cgiWifiAps.apData[pos - 1]->channel, 
+                        ( pos - 1 == cgiWifiAps.noAps - 1 ) ? "\r\n" : ",\r\n" ); // <-terminator
+
          httpdSend( connData, buff, len );
       }
       pos++;
       if( ( pos - 1 ) >= cgiWifiAps.noAps )
       {
-         len = sprintf( buff, "]\n}\n}\n" );
+         len = sprintf( buff, "]\r\n}\r\n}\r\n" ); // terminate the whole object
          httpdSend( connData, buff, len );
          // Also start a new scan.
          wifiStartScan();
@@ -165,31 +170,28 @@ CgiStatus ICACHE_FLASH_ATTR cgiWiFiScan( HttpdConnData *connData )
    }
 
    httpdStartResponse( connData, 200 );
-   httpdHeader( connData, "Content-Type", "text/json" );
+   httpdHeader( connData, "Content-Type", "application/json" );
    httpdEndHeaders( connData );
 
    if( cgiWifiAps.scanInProgress == 1 )
    {
       // We're still scanning. Tell Javascript code that.
-      len = sprintf( buff, "{\n \"result\": { \n\"inProgress\": \"1\"\n }\n}\n" );
+      len = sprintf( buff, "{\r\n \"result\": { \r\n\"inProgress\": \"1\"\r\n }\r\n}\r\n" );
       httpdSend( connData, buff, len );
       return HTTPD_CGI_DONE;
    }
    else
    {
       // We have a scan result. Pass it on.
-      len = sprintf( buff, "{\n \"result\": { \n\"inProgress\": \"0\", \n\"APs\": [\n" );
+      len = sprintf( buff, "{\r\n \"result\": { \r\n\"inProgress\": \"0\", \r\n\"APs\": [\r\n" );
       httpdSend( connData, buff, len );
-      if( cgiWifiAps.apData == NULL ) cgiWifiAps.noAps = 0;
+      if( cgiWifiAps.apData == NULL ) 
+         cgiWifiAps.noAps = 0;
       connData->cgiData = ( void * )1;
       return HTTPD_CGI_MORE;
    }
-#else
-   return HTTPD_CGI_DONE;
-#endif
 }
 
-#ifndef ESP32
 // Temp store for new ap info.
 static struct station_config stconf;
 
@@ -201,19 +203,17 @@ static void ICACHE_FLASH_ATTR resetTimerCb( void *arg )
    if( x == STATION_GOT_IP )
    {
       // Go to STA mode. This needs a reset, so do that.
-      httpd_printf( "Got IP. Going into STA mode..\n" );
+      ESP_LOGD( TAG, "Got IP. Going into STA mode..\n" );
       wifi_set_opmode( 1 );
       system_restart();
    }
    else
    {
       connTryStatus = CONNTRY_FAIL;
-      httpd_printf( "Connect fail. Not going into STA-only mode.\n" );
+      ESP_LOGD( TAG, "Connect fail. Not going into STA-only mode.\n" );
       // Maybe also pass this through on the webpage?
    }
 }
-
-
 
 // Actually connect to a station. This routine is timed because I had problems
 // with immediate connections earlier. It probably was something else that caused it,
@@ -221,7 +221,7 @@ static void ICACHE_FLASH_ATTR resetTimerCb( void *arg )
 static void ICACHE_FLASH_ATTR reassTimerCb( void *arg )
 {
    int x;
-   httpd_printf( "Try to connect to AP....\n" );
+   ESP_LOGD( TAG, "Try to connect to AP....\n" );
    wifi_station_disconnect();
    wifi_station_set_config( &stconf );
    wifi_station_connect();
@@ -235,30 +235,28 @@ static void ICACHE_FLASH_ATTR reassTimerCb( void *arg )
       os_timer_arm( &resetTimer, 15000, 0 ); // time out after 15 secs of trying to connect
    }
 }
-#endif
 
 // This cgi uses the routines above to connect to a specific access point with the
 // given ESSID using the given password.
 
 CgiStatus ICACHE_FLASH_ATTR cgiWiFiConnect( HttpdConnData *connData )
 {
-#ifndef ESP32
    char essid[128];
    char passwd[128];
    static os_timer_t reassTimer;
 
-   if( connData->conn == NULL )
+   if( connData->isConnectionClosed )
    {
       // Connection aborted. Clean up.
       return HTTPD_CGI_DONE;
    }
 
-   httpdFindArg( connData->post->buff, "essid", essid, sizeof( essid ) );
-   httpdFindArg( connData->post->buff, "passwd", passwd, sizeof( passwd ) );
+   httpdFindArg( connData->post.buff, "essid", essid, sizeof( essid ) );
+   httpdFindArg( connData->post.buff, "passwd", passwd, sizeof( passwd ) );
 
    strncpy( ( char* )stconf.ssid, essid, 32 );
    strncpy( ( char* )stconf.password, passwd, 64 );
-   httpd_printf( "Try to connect to AP %s pw %s\n", essid, passwd );
+   ESP_LOGD( TAG, "Try to connect to AP %s pw %s\n", essid, passwd );
 
    // Schedule disconnect/connect
    os_timer_disarm( &reassTimer );
@@ -270,7 +268,6 @@ CgiStatus ICACHE_FLASH_ATTR cgiWiFiConnect( HttpdConnData *connData )
    os_timer_arm( &reassTimer, 500, 0 );
    httpdRedirect( connData, "connecting.html" );
 #endif
-#endif
    return HTTPD_CGI_DONE;
 }
 
@@ -279,11 +276,10 @@ CgiStatus ICACHE_FLASH_ATTR cgiWiFiConnect( HttpdConnData *connData )
 
 CgiStatus ICACHE_FLASH_ATTR cgiWiFiSetMode( HttpdConnData *connData )
 {
-#ifndef ESP32
    int len;
    char buff[1024];
 
-   if( connData->conn == NULL )
+   if( connData->isConnectionClosed )
    {
       // Connection aborted. Clean up.
       return HTTPD_CGI_DONE;
@@ -292,25 +288,23 @@ CgiStatus ICACHE_FLASH_ATTR cgiWiFiSetMode( HttpdConnData *connData )
    len = httpdFindArg( connData->getArgs, "mode", buff, sizeof( buff ) );
    if( len != 0 )
    {
-      httpd_printf( "cgiWifiSetMode: %s\n", buff );
+      ESP_LOGD( TAG, "cgiWifiSetMode: %s\n", buff );
 #ifndef DEMO_MODE
       wifi_set_opmode( atoi( buff ) );
       system_restart();
 #endif
    }
    httpdRedirect( connData, "/wifi" );
-#endif
    return HTTPD_CGI_DONE;
 }
 
 // Set wifi channel for AP mode
 CgiStatus ICACHE_FLASH_ATTR cgiWiFiSetChannel( HttpdConnData *connData )
 {
-#ifndef ESP32
    int len;
    char buff[64];
 
-   if( connData->conn == NULL )
+   if( connData->isConnectionClosed )
    {
       // Connection aborted. Clean up.
       return HTTPD_CGI_DONE;
@@ -319,11 +313,11 @@ CgiStatus ICACHE_FLASH_ATTR cgiWiFiSetChannel( HttpdConnData *connData )
    len = httpdFindArg( connData->getArgs, "ch", buff, sizeof( buff ) );
    if( len != 0 )
    {
-      httpd_printf( "cgiWifiSetChannel: %s\n", buff );
+      ESP_LOGD( TAG, "cgiWifiSetChannel: %s\n", buff );
       int channel = atoi( buff );
       if( channel > 0 && channel < 15 )
       {
-         httpd_printf( "Setting ch=%d\n", channel );
+         ESP_LOGD( TAG, "Setting ch=%d\n", channel );
 
          struct softap_config wificfg;
          wifi_softap_get_config( &wificfg );
@@ -332,14 +326,11 @@ CgiStatus ICACHE_FLASH_ATTR cgiWiFiSetChannel( HttpdConnData *connData )
       }
    }
    httpdRedirect( connData, "/wifi" );
-#endif
-
    return HTTPD_CGI_DONE;
 }
 
 CgiStatus ICACHE_FLASH_ATTR cgiWiFiConnStatus( HttpdConnData *connData )
 {
-#ifndef ESP32
    char buff[1024];
    int len;
    struct ip_info info;
@@ -375,15 +366,13 @@ CgiStatus ICACHE_FLASH_ATTR cgiWiFiConnStatus( HttpdConnData *connData )
    }
 
    httpdSend( connData, buff, len );
-#endif
    return HTTPD_CGI_DONE;
 }
 
 // Template code for the WLAN page.
-int ICACHE_FLASH_ATTR tplWlan( HttpdConnData *connData, char *token, void **arg )
+CgiStatus ICACHE_FLASH_ATTR tplWlan( HttpdConnData *connData, char *token, void **arg )
 {
-#ifndef ESP32
-   char buff[1024];
+   char buff[512];
    int x;
    static struct station_config stconf;
    if( token == NULL ) return HTTPD_CGI_DONE;
@@ -418,6 +407,6 @@ int ICACHE_FLASH_ATTR tplWlan( HttpdConnData *connData, char *token, void **arg 
       }
    }
    httpdSend( connData, buff, -1 );
-#endif
    return HTTPD_CGI_DONE;
 }
+#endif

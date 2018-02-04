@@ -79,7 +79,6 @@
 
    typedef struct espconn* ConnTypePtr;
    typedef HttpdPlatTimer* HttpdPlatTimerHandle;
-   #define httpd_printf(format, ...) os_printf(format, ##__VA_ARGS__)
 #endif
 
 #endif  // __PLATFORM_H__

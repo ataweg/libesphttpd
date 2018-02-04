@@ -10,20 +10,26 @@ Connector to let httpd use the espfs filesystem to serve the files in it.
 #include <libesphttpd/linux.h>
 #else
 #include <libesphttpd/esp.h>
+   #include "esp_log.h"
 #endif
 
 #include "libesphttpd/httpdespfs.h"
 #include "libesphttpd/espfs.h"
 #include "espfsformat.h"
 
-#include "esp_log.h"
 const static char* TAG = "httpdespfs";
-
-#define FILE_CHUNK_LEN    1024
 
 // The static files marked with FLAG_GZIP are compressed and will be served with GZIP compression.
 // If the client does not advertise that he accepts GZIP send following warning message (telnet users for e.g.)
-static const char *gzipNonSupportedMessage = "HTTP/1.0 501 Not implemented\r\nServer: esp8266-httpd/"HTTPDVER"\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: 52\r\n\r\nYour browser does not accept gzip-compressed data.\r\n";
+
+static const char *gzipNonSupportedMessage = 
+   "HTTP/1.0 501 Not implemented\r\n"
+   "Server: esp8266-httpd/"HTTPDVER"\r\n"
+   "Connection: close\r\n"
+   "Content-Type: text/plain\r\n"
+   "Content-Length: 52\r\n"
+   "\r\n"
+   "Your browser does not accept gzip-compressed data.\r\n";
 
 /**
  * Try to open a file
@@ -99,8 +105,7 @@ EspFsFile *tryOpenIndex( const char *path )
    return NULL; // failed to guess the right name
 }
 
-CgiStatus ICACHE_FLASH_ATTR
-serveStaticFile( HttpdConnData *connData, const char* filepath )
+CgiStatus ICACHE_FLASH_ATTR serveStaticFile( HttpdConnData *connData, const char* filepath, int responseCode )
 {
    EspFsFile *file = connData->cgiData;
    int len;
@@ -131,7 +136,7 @@ serveStaticFile( HttpdConnData *connData, const char* filepath )
       if( file == NULL )
       {
          // file not found
-
+         ESP_LOGE( TAG, "serveStaticFile file %s not found", filepath );
          // If this is a folder, look for index file
          file = tryOpenIndex( filepath );
          if( file == NULL ) return HTTPD_CGI_NOTFOUND;
@@ -159,13 +164,14 @@ serveStaticFile( HttpdConnData *connData, const char* filepath )
       }
 
       connData->cgiData = file;
-      httpdStartResponse( connData, 200 );
-      httpdHeader( connData, "Content-Type", httpdGetMimetype( filepath ) );
+      httpdStartResponse( connData, responseCode );
+      const char *mime = httpdGetMimetype( filepath );
+      httpdHeader( connData, "Content-Type", mime );
       if( isGzip )
       {
          httpdHeader( connData, "Content-Encoding", "gzip" );
       }
-      httpdHeader( connData, "Cache-Control", "max-age=3600, must-revalidate" );
+      httpdAddCacheHeaders( connData, mime );
       httpdEndHeaders( connData );
       return HTTPD_CGI_MORE;
    }
@@ -193,9 +199,8 @@ serveStaticFile( HttpdConnData *connData, const char* filepath )
 CgiStatus ICACHE_FLASH_ATTR cgiEspFsHook( HttpdConnData *connData )
 {
    const char *filepath = ( connData->cgiArg == NULL ) ? connData->url : ( char * )connData->cgiArg;
-   return serveStaticFile( connData, filepath );
+   return serveStaticFile( connData, filepath, 200 );
 }
-
 
 // cgiEspFsTemplate can be used as a template.
 
@@ -226,8 +231,7 @@ typedef struct
 }
 TplData;
 
-int ICACHE_FLASH_ATTR
-tplSend( HttpdConnData *conn, const char *str, int len )
+int ICACHE_FLASH_ATTR tplSend( HttpdConnData *conn, const char *str, int len )
 {
    if( conn == NULL ) return 0;
    TplData *tpd = conn->cgiData;
@@ -241,10 +245,6 @@ tplSend( HttpdConnData *conn, const char *str, int len )
 CgiStatus ICACHE_FLASH_ATTR cgiEspFsTemplate( HttpdConnData *connData )
 {
    TplData *tpd = connData->cgiData;
-   int len;
-   int x, sp = 0;
-   char *e = NULL;
-   int tokOfs;
 
    if( connData->isConnectionClosed )
    {
@@ -283,6 +283,7 @@ CgiStatus ICACHE_FLASH_ATTR cgiEspFsTemplate( HttpdConnData *connData )
          tpd->file = tryOpenIndex( filepath );
          if( tpd->file == NULL )
          {
+            espFsClose( tpd->file );
             free( tpd );
             return HTTPD_CGI_NOTFOUND;
          }
@@ -292,7 +293,7 @@ CgiStatus ICACHE_FLASH_ATTR cgiEspFsTemplate( HttpdConnData *connData )
       tpd->tokenPos = -1;
       if( espFsFlags( tpd->file ) & FLAG_GZIP )
       {
-         ESP_LOGE( TAG, "cgiEspFsTemplate: Trying to use gzip-compressed file %s as template", connData->url );
+         ESP_LOGE( TAG, "cgiEspFsTemplate: Trying to use gzip-compressed file %s as template.", connData->url );
          espFsClose( tpd->file );
          free( tpd );
          return HTTPD_CGI_NOTFOUND;
@@ -307,7 +308,19 @@ CgiStatus ICACHE_FLASH_ATTR cgiEspFsTemplate( HttpdConnData *connData )
       return HTTPD_CGI_MORE;
    }
 
+   return cgiTemplateSendContent( connData );
+}
+
+CgiStatus ICACHE_FLASH_ATTR cgiTemplateSendContent( HttpdConnData* connData )
+{
+   TplData *tpd = connData->cgiData;
+
    char *buff = tpd->buff;
+
+   int len;
+   int x, sp = 0;
+   char *e = NULL;
+   int tokOfs;
 
    // resume the parser state from the last token,
    // if subst. func wants more data to be sent.
@@ -329,6 +342,7 @@ CgiStatus ICACHE_FLASH_ATTR cgiEspFsTemplate( HttpdConnData *connData )
       x =  0;
    }
 
+   // check for tokens like %text%
    if( len > 0 )
    {
       for( ; x < len; x++ )

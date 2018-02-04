@@ -9,7 +9,9 @@ Websocket support for esphttpd. Inspired by https:// github.com/dangrie158/ESP-8
 #ifdef linux
 #include <libesphttpd/linux.h>
 #else
-#include <libesphttpd/esp.h>
+   #define LOG_LOCAL_LEVEL    ESP_LOG_ERROR
+   #include "esp_log.h"
+   #include <libesphttpd/esp.h>
 #endif
 
 #include "libesphttpd/httpd.h"
@@ -17,7 +19,6 @@ Websocket support for esphttpd. Inspired by https:// github.com/dangrie158/ESP-8
 #include "base64.h"
 #include "libesphttpd/cgiwebsocket.h"
 
-#include "esp_log.h"
 const static char* TAG = "cgiwebsocket";
 
 #define WS_KEY_IDENTIFIER "Sec-WebSocket-Key: "
@@ -175,7 +176,7 @@ void ICACHE_FLASH_ATTR cgiWebsocketClose( HttpdInstance *pInstance, Websock *ws,
 
 static void ICACHE_FLASH_ATTR websockFree( Websock *ws )
 {
-   ESP_LOGD( TAG, "" );
+   ESP_LOGD( TAG, "Free" );
    if( ws->closeCb ) ws->closeCb( ws );
    // Clean up linked list
    if( llStart == ws )
@@ -195,12 +196,12 @@ static void ICACHE_FLASH_ATTR websockFree( Websock *ws )
 CgiStatus ICACHE_FLASH_ATTR cgiWebSocketRecv( HttpdInstance *pInstance, HttpdConnData *connData, char *data, int len )
 {
    int i, j, sl;
-   int r = HTTPD_CGI_MORE;
+   CgiStatus r = HTTPD_CGI_MORE;
    int wasHeaderByte;
    Websock *ws = ( Websock* )connData->cgiData;
    for( i = 0; i < len; i++ )
    {
-//    httpd_printf("Ws: State %d byte 0x%02X\n", ws->priv->wsStatus, data[i]);
+      // ESP_LOGD( TAG, "Ws: State %d byte 0x%02X", ws->priv->wsStatus, data[i]);
       wasHeaderByte = 1;
       if( ws->priv->wsStatus == ST_FLAGS )
       {
@@ -264,9 +265,9 @@ CgiStatus ICACHE_FLASH_ATTR cgiWebSocketRecv( HttpdInstance *pInstance, HttpdCon
          if( sl > ws->priv->fr.len ) sl = ws->priv->fr.len;
          for( j = 0; j < sl; j++ ) data[i + j] ^= ( ws->priv->fr.mask[( ws->priv->maskCtr++ ) & 3] );
 
-//       httpd_printf("Unmasked: ");
-//       for (j=0; j<sl; j++) httpd_printf("%02X ", data[i+j]&0xff);
-//       httpd_printf("\n");
+//       ESP_LOGD( TAG, "Unmasked: ");
+//       for (j=0; j<sl; j++) ESP_LOGD( TAG, "%02X ", data[i+j]&0xff);
+//       ESP_LOGD( TAG, "\n");
 
          // Inspect the header to see what we need to do.
          if( ( ws->priv->fr.flags & OPCODE_MASK ) == OPCODE_PING )
@@ -316,7 +317,8 @@ CgiStatus ICACHE_FLASH_ATTR cgiWebSocketRecv( HttpdInstance *pInstance, HttpdCon
          }
          else
          {
-            if( !ws->priv->frameCont ) ESP_LOGE( TAG, "Unknown opcode 0x%X", ws->priv->fr.flags & OPCODE_MASK );
+            if( !ws->priv->frameCont )
+               ESP_LOGE( TAG, "Unknown opcode 0x%X", ws->priv->fr.flags & OPCODE_MASK );
          }
          i += sl - 1;
          ws->priv->fr.len -= sl;
@@ -363,7 +365,7 @@ CgiStatus ICACHE_FLASH_ATTR cgiWebsocket( HttpdConnData *connData )
 
    if( connData->cgiData == NULL )
    {
-//    httpd_printf("WS: First call\n");
+//      ESP_LOGD( TAG, "WS: First call");
       // First call here. Check if client headers are OK, send server header.
       i = httpdGetHeader( connData, "Upgrade", buff, sizeof( buff ) - 1 );
       ESP_LOGD( TAG, "Upgrade: %s", buff );
@@ -372,7 +374,7 @@ CgiStatus ICACHE_FLASH_ATTR cgiWebsocket( HttpdConnData *connData )
          i = httpdGetHeader( connData, "Sec-WebSocket-Key", buff, sizeof( buff ) - 1 );
          if( i )
          {
-//          httpd_printf("WS: Key: %s\n", buff);
+//           ESP_LOGD( TAG, "Key: %s", buff);
             // Seems like a WebSocket connection.
             // Alloc structs
             connData->cgiData = malloc( sizeof( Websock ) );

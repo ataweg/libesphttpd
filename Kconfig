@@ -1,6 +1,8 @@
 #ESP-IDF Kconfig configuration file. Not used for ESP8266 RTOS/non-RTOS SDKs.
 
-menuconfig ESPHTTPD_ENABLED
+menu "Libesphttpd"
+
+config ESPHTTPD_ENABLED
     bool "esphttpd"
     help
         Select this option to enable libesphttpd and show the submodule with libesphttpd configuration
@@ -81,3 +83,4 @@ config ESPHTTPD_BACKLOG_SUPPORT
 		no need for the backlog.
 
 		If you are using FreeRTOS you'll save codespace by leaving this option disabled.
+endmenu

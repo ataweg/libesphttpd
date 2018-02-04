@@ -18,6 +18,11 @@
 
 #define HTTPDVER "0.5"
 
+// default servername
+#ifndef HTTPD_SERVERNAME
+   #define HTTPD_SERVERNAME "esp-httpd (awe) " HTTPDVER
+#endif
+
 // Max length of request head. This is statically allocated for each connection.
 #ifndef HTTPD_MAX_HEAD_LEN
    #define HTTPD_MAX_HEAD_LEN    1024
@@ -78,6 +83,8 @@ typedef CgiStatus( * cgiSendCallback )( HttpdConnData *connData );
 typedef CgiStatus( * cgiRecvHandler )( HttpdInstance *pInstance, HttpdConnData *connData, char *data, int len );
 
 #ifdef CONFIG_ESPHTTPD_BACKLOG_SUPPORT
+typedef struct HttpSendBacklogItem HttpSendBacklogItem;
+
 struct HttpSendBacklogItem
 {
    int len;
