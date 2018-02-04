@@ -2,9 +2,9 @@
 
 #include "httpd.h"
 
-CgiStatus cgiRedirect(HttpdConnData *connData);
+CgiStatus cgiRedirect( HttpdConnData *connData );
 
-// This CGI function redirects to a fixed url of http://[hostname]/ if hostname
+// This CGI function redirects to a fixed url of http:// [hostname]/ if hostname
 // field of request isn't already that hostname. Use this in combination with
 // a DNS server that redirects everything to the ESP in order to load a HTML
 // page as soon as a phone, tablet etc connects to the ESP.
@@ -25,6 +25,6 @@ CgiStatus cgiRedirect(HttpdConnData *connData);
 //
 // Example usage:
 //         ROUTE_CGI_ARG("*", cgiRedirectToHostname, "HOSTNAME_HERE"),
-CgiStatus cgiRedirectToHostname(HttpdConnData *connData);
+CgiStatus cgiRedirectToHostname( HttpdConnData *connData );
 
-CgiStatus cgiRedirectApClientToHostname(HttpdConnData *connData);
+CgiStatus cgiRedirectApClientToHostname( HttpdConnData *connData );

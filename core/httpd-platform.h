@@ -6,21 +6,21 @@
 /**
  * @return number of bytes that were written
  */
-int httpdPlatSendData(HttpdInstance *pInstance, HttpdConnData *pConn, char *buff, int len);
+int httpdPlatSendData( HttpdInstance *pInstance, HttpdConnData *pConn, char *buff, int len );
 
-void httpdPlatDisconnect(HttpdConnData *ponn);
-void httpdPlatDisableTimeout(HttpdConnData *pConn);
+void httpdPlatDisconnect( HttpdConnData *ponn );
+void httpdPlatDisableTimeout( HttpdConnData *pConn );
 
-void httpdPlatLock(HttpdInstance *pInstance);
-void httpdPlatUnlock(HttpdInstance *pInstance);
+void httpdPlatLock( HttpdInstance *pInstance );
+void httpdPlatUnlock( HttpdInstance *pInstance );
 
-HttpdPlatTimerHandle httpdPlatTimerCreate(const char *name, int periodMs, int autoreload, void (*callback)(void *arg), void *ctx);
-void httpdPlatTimerStart(HttpdPlatTimerHandle timer);
-void httpdPlatTimerStop(HttpdPlatTimerHandle timer);
-void httpdPlatTimerDelete(HttpdPlatTimerHandle timer);
+HttpdPlatTimerHandle httpdPlatTimerCreate( const char *name, int periodMs, int autoreload, void ( *callback )( void *arg ), void *ctx );
+void httpdPlatTimerStart( HttpdPlatTimerHandle timer );
+void httpdPlatTimerStop( HttpdPlatTimerHandle timer );
+void httpdPlatTimerDelete( HttpdPlatTimerHandle timer );
 
 #ifdef CONFIG_ESPHTTPD_SHUTDOWN_SUPPORT
-void httpdPlatShutdown(HttpdInstance *pInstance);
+void httpdPlatShutdown( HttpdInstance *pInstance );
 #endif
 
 #endif

@@ -19,15 +19,16 @@ with the FLAG_LASTFILE flag set.
 #define FLAG_GZIP (1<<1)
 #define COMPRESS_NONE 0
 #define COMPRESS_HEATSHRINK 1
-#define ESPFS_MAGIC 0x73665345
+#define ESPFS_MAGIC 0x73665345   // "ESfs"
 
-typedef struct {
-	int32_t magic;
-	int8_t flags;
-	int8_t compression;
-	int16_t nameLen;
-	int32_t fileLenComp;
-	int32_t fileLenDecomp;
-} __attribute__((packed)) EspFsHeader;
+typedef struct
+{
+   int32_t magic;
+   int8_t flags;
+   int8_t compression;
+   int16_t nameLen;
+   int32_t fileLenComp;
+   int32_t fileLenDecomp;
+} __attribute__( ( packed ) ) EspFsHeader;
 
 #endif

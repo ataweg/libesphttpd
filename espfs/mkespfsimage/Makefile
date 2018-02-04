@@ -15,7 +15,6 @@ endif
 OBJS=main.o heatshrink_encoder.o
 TARGET=mkespfsimage
 
-
 %.o: $(THISDIR)/%.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 

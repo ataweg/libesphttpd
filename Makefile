@@ -43,15 +43,14 @@ SDK_BASE	?= /opt/Espressif/ESP8266_SDK
 # Only used for the FreeRTOS build
 SDK_PATH	?= /opt/Espressif/ESP8266_RTOS_SDK
 
-
 # name for the target project
 LIB		= libesphttpd.a
 
 # which modules (subdirectories) of the project to include in compiling
 MODULES		= espfs core util
-EXTRA_INCDIR	= ./include \
-					. \
-					lib/heatshrink/
+EXTRA_INCDIR  = ./include \
+		. \
+		lib/heatshrink/
 
 
 # for non-os builds osapi.h includes "user_config.h" so we have to ensure that
@@ -65,38 +64,36 @@ CFLAGS		= -Os -ggdb -std=c99 -Werror -Wpointer-arith -Wundef -Wall -Wl,-EL -fno-
 		-nostdlib -mlongcalls -mtext-section-literals  -D__ets__ -DICACHE_FLASH \
 		-Wno-address -DHTTPD_MAX_CONNECTIONS=$(HTTPD_MAX_CONNECTIONS) -DHTTPD_STACKSIZE=$(HTTPD_STACKSIZE) \
 
-
 # various paths from the SDK used in this project
 SDK_LIBDIR	= lib
 SDK_LDDIR	= ld
-
 
 ifeq ("$(FREERTOS)","yes")
 CFLAGS		+= -DFREERTOS -DLWIP_OPEN_SRC -ffunction-sections -fdata-sections 
 ifeq ("$(ESP32)","yes")
 SDK_INCDIR	= include \
-			include/esp32 \
-			driver_lib/include \
-			extra_include \
-			third_party/include \
-			third_party/include/cjson \
-			third_party/include/freertos \
-			third_party/include/lwip \
-			third_party/include/lwip/ipv4 \
-			third_party/include/lwip/ipv6 \
-			third_party/include/ssl
-CFLAGS		+= -DESP32 -DFREERTOS -DLWIP_OPEN_SRC -ffunction-sections -fdata-sections 
+		include/esp32 \
+		driver_lib/include \
+		extra_include \
+		third_party/include \
+		third_party/include/cjson \
+		third_party/include/freertos \
+		third_party/include/lwip \
+		third_party/include/lwip/ipv4 \
+		third_party/include/lwip/ipv6 \
+		third_party/include/ssl
+CFLAGS		+= -DESP32 -DFREERTOS -DLWIP_OPEN_SRC -ffunction-sections -fdata-sections
 else
 SDK_INCDIR	= include \
-			include/freertos \
-			include/espressif/esp8266 \
-			include/espressif \
-			extra_include \
-			include/lwip \
-			include/lwip/lwip \
-			include/lwip/ipv4 \
-			include/lwip/ipv6
-CFLAGS		+= -DFREERTOS -DLWIP_OPEN_SRC -ffunction-sections -fdata-sections 
+		include/freertos \
+		include/espressif/esp8266 \
+		include/espressif \
+		extra_include \
+		include/lwip \
+		include/lwip/lwip \
+		include/lwip/ipv4 \
+		include/lwip/ipv6
+CFLAGS		+= -DFREERTOS -DLWIP_OPEN_SRC -ffunction-sections -fdata-sections
 endif
 SDK_INCDIR	:= $(addprefix -I$(SDK_PATH)/,$(SDK_INCDIR))
 else
@@ -127,7 +124,7 @@ BUILD_DIR	:= $(addprefix $(BUILD_BASE)/,$(MODULES))
 SRC		:= $(foreach sdir,$(SRC_DIR),$(wildcard $(sdir)/*.c))
 OBJ		:= $(patsubst %.c,$(BUILD_BASE)/%.o,$(SRC))
 
-INCDIR	:= $(addprefix -I,$(SRC_DIR))
+INCDIR		+= $(addprefix -I,$(SRC_DIR))
 EXTRA_INCDIR	:= $(addprefix -I,$(EXTRA_INCDIR))
 MODULE_INCDIR	:= $(addsuffix /include,$(INCDIR))
 
@@ -139,7 +136,6 @@ else
 Q := @
 vecho := @echo
 endif
-
 
 ifneq ("$(FREERTOS)","yes")
 ifeq ("$(USE_OPENSDK)","yes")
@@ -186,6 +182,7 @@ endef
 all: checkdirs $(LIB) webpages.espfs libwebpages-espfs.a
 
 submodules: lib/heatshrink/Makefile
+
 lib/heatshrink/Makefile:
 	$(Q) echo "Heatshrink isn't found. Checking out submodules to fetch it."
 	$(Q) git submodule init
